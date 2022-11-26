@@ -1,7 +1,9 @@
 package lasProcessing
 
 import (
-	"github.com/jblindsay/lidario"
+	"fmt"
+
+	"github.com/Jacob4649/go-voxelize/go-voxelize/lidarioMod"
 )
 
 // Chunk of a LAS file
@@ -15,7 +17,7 @@ type LASChunk struct {
 }
 
 // Divides a LAS file into chunks for processing
-func ChunkFile(file *lidario.LasFile, numChunks int) []*LASChunk {
+func ChunkFile(file *lidarioMod.LasFile, numChunks int) []*LASChunk {
 	chunks := make([]*LASChunk, 0)
 
 	chunkSize := file.Header.NumberPoints / numChunks
@@ -35,10 +37,10 @@ func ChunkFile(file *lidario.LasFile, numChunks int) []*LASChunk {
 type LASProcessor[T any] interface {
 
 	// Processes a chunk of the given LAS file
-	Process(inputFile *lidario.LasFile, chunk *LASChunk, voxelSize float64, output chan<- *T)
+	Process(inputFile *lidarioMod.LasFile, chunk *LASChunk, voxelSize float64, output chan<- *T)
 
 	// Gets the default state of the output object
-	EmptyOutput(inputFile *lidario.LasFile, voxelSize float64) *T
+	EmptyOutput(inputFile *lidarioMod.LasFile, voxelSize float64) *T
 
 	// Combines output objects
 	CombineOutput(base *T, incoming *T) *T
@@ -46,7 +48,9 @@ type LASProcessor[T any] interface {
 
 // Distributes the provided chunks over the provided channel, then sends nil
 func distributeChunks(chunks []*LASChunk, output chan<- *LASChunk, concurrency int) {
-	for _, chunk := range chunks {
+	for i, chunk := range chunks {
+		s := "Beginning Chunk: " + fmt.Sprint(i)
+		println(s)
 		output <- chunk
 	}
 	for i := 0; i < concurrency; i++ {
@@ -55,7 +59,7 @@ func distributeChunks(chunks []*LASChunk, output chan<- *LASChunk, concurrency i
 }
 
 // Concurrently processes some chunks
-func handleConcurrentProcess[T any](inputFile *lidario.LasFile, inputChunk <-chan *LASChunk, processor LASProcessor[T], voxelSize float64, output chan<- *T) {
+func handleConcurrentProcess[T any](inputFile *lidarioMod.LasFile, inputChunk <-chan *LASChunk, processor LASProcessor[T], voxelSize float64, output chan<- *T) {
 	// for non nil input chunks
 	for chunk := <- inputChunk; chunk != nil; chunk = <- inputChunk {
 		processor.Process(inputFile, chunk, voxelSize, output)
@@ -63,7 +67,7 @@ func handleConcurrentProcess[T any](inputFile *lidario.LasFile, inputChunk <-cha
 }
 
 // Concurrently processes a LAS file into voxels in the specified output format
-func ConcurrentProcess[T any](inputFile *lidario.LasFile, chunks []*LASChunk, processor LASProcessor[T], concurrency int, voxelSize float64) *T {
+func ConcurrentProcess[T any](inputFile *lidarioMod.LasFile, chunks []*LASChunk, processor LASProcessor[T], concurrency int, voxelSize float64) *T {
 	output := processor.EmptyOutput(inputFile, voxelSize)
 
 	outputChannel := make(chan *T)
@@ -88,7 +92,7 @@ func ConcurrentProcess[T any](inputFile *lidario.LasFile, chunks []*LASChunk, pr
 }
 
 // Processes a LAS file sequentially
-func SequentialProcess[T any](inputFile *lidario.LasFile, chunks []*LASChunk, processor LASProcessor[T], voxelSize float64) *T {
+func SequentialProcess[T any](inputFile *lidarioMod.LasFile, chunks []*LASChunk, processor LASProcessor[T], voxelSize float64) *T {
 	output := processor.EmptyOutput(inputFile, voxelSize)
 
 	for _, chunk := range chunks {

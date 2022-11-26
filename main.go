@@ -2,24 +2,24 @@ package main
 
 import (
 	"github.com/Jacob4649/go-voxelize/go-voxelize/lasProcessing"
+	"github.com/Jacob4649/go-voxelize/go-voxelize/lidarioMod"
 	"github.com/Jacob4649/go-voxelize/go-voxelize/voxels"
-	"github.com/jblindsay/lidario"
 )
 
 func main() {
 	fileName := "DemoFile.las"
 
-	file, err := lidario.NewLasFile(fileName, "r")
+	file, err := lidarioMod.NewLasFile(fileName, "rh")
 
 	if err != nil {
 		panic(err)
 	}
 
-	chunks := lasProcessing.ChunkFile(file, 36)
+	chunks := lasProcessing.ChunkFile(file, 256)
 
 	processor := voxels.VoxelSetProcessor{}
 
-	test := lasProcessing.ConcurrentProcess[voxels.VoxelSet](file, chunks, &processor, 8, 1)
+	test := lasProcessing.ConcurrentProcess[voxels.VoxelSet](file, chunks, &processor, 32, 1)
 
 	if test == nil {
 		println("Error with test")

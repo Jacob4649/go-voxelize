@@ -1,12 +1,13 @@
 package voxels
 
 import (
+	"encoding/binary"
 	"math"
 
 	"github.com/Jacob4649/go-voxelize/go-voxelize/lasProcessing"
+	"github.com/Jacob4649/go-voxelize/go-voxelize/lidarioMod"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/jblindsay/lidario"
 )
 
 // Voxel coordinate type
@@ -62,22 +63,42 @@ type VoxelSetProcessor struct {
 
 }
 
+// Reads the point data for a single point
+func readPointData(inputFile *lidarioMod.LasFile, point int) (float64, float64, float64) {
+
+	recordLength := inputFile.Header.PointRecordLength
+
+	offset := int64(inputFile.Header.OffsetToPoints)
+
+	pointOffset := int64(recordLength) * int64(point)
+
+	rawBytes := make([]byte, recordLength)
+
+	inputFile.RawFile.ReadAt(rawBytes, offset + pointOffset)
+
+	var x float64 
+	var y float64
+	var z float64
+
+	byteOffset := 0
+
+	x = float64(int32(binary.LittleEndian.Uint32(rawBytes[byteOffset:byteOffset+4])))*inputFile.Header.XScaleFactor + inputFile.Header.XOffset
+	byteOffset += 4
+	y = float64(int32(binary.LittleEndian.Uint32(rawBytes[byteOffset:byteOffset+4])))*inputFile.Header.YScaleFactor + inputFile.Header.YOffset
+	byteOffset += 4
+	z = float64(int32(binary.LittleEndian.Uint32(rawBytes[byteOffset:byteOffset+4])))*inputFile.Header.ZScaleFactor + inputFile.Header.ZOffset
+
+	return x, y, z
+}
+
 // Processes a chunk of a LAS file into a VoxelSet
-func(processor *VoxelSetProcessor) Process(inputFile *lidario.LasFile, chunk *lasProcessing.LASChunk, voxelSize float64, output chan<- *VoxelSet) {
+func(processor *VoxelSetProcessor) Process(inputFile *lidarioMod.LasFile, chunk *lasProcessing.LASChunk, voxelSize float64, output chan<- *VoxelSet) {
 	voxels := &VoxelSet{Voxels: mapset.NewThreadUnsafeSet[Coordinate]()}
 	
 	minX, minY, minZ := inputFile.Header.MinX, inputFile.Header.MinY, inputFile.Header.MinZ
 
 	for i := chunk.Start; i < chunk.End; i++ {
-		point, err := inputFile.LasPoint(i)
-		
-		// exit on error
-		if err != nil {
-			panic(err)
-		}
-
-		pointData := point.PointData()
-		x, y, z := pointData.X, pointData.Y, pointData.Z
+		x, y, z := readPointData(inputFile, i)
 		
 		coordinate := pointToCoordinate(x, minX, y, minY, z, minZ, voxelSize)
 
@@ -88,7 +109,7 @@ func(processor *VoxelSetProcessor) Process(inputFile *lidario.LasFile, chunk *la
 }
 
 // Gets an empty VoxelSet
-func(processor *VoxelSetProcessor) EmptyOutput(inputFile *lidario.LasFile, voxelSize float64) *VoxelSet {
+func(processor *VoxelSetProcessor) EmptyOutput(inputFile *lidarioMod.LasFile, voxelSize float64) *VoxelSet {
 	
 	header := inputFile.Header
 
