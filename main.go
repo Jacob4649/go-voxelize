@@ -15,7 +15,7 @@ func main() {
 		panic(err)
 	}
 
-	chunks := lasProcessing.ChunkFile(file, 256)
+	chunks := lasProcessing.ChunkFile(file, 1024)
 
 	processor := voxels.VoxelSetProcessor{}
 

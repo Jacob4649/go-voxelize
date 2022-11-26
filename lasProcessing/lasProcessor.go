@@ -1,7 +1,7 @@
 package lasProcessing
 
 import (
-	"fmt"
+	"io"
 
 	"github.com/Jacob4649/go-voxelize/go-voxelize/lidarioMod"
 )
@@ -14,6 +14,29 @@ type LASChunk struct {
 
 	// End of the LAS chunk
 	End int
+}
+
+// Gets the bytes for a LAS chunk
+func(chunk *LASChunk) ReadOnFile(file *lidarioMod.LasFile) []byte {
+	recordLength := file.Header.PointRecordLength
+
+	offset := int64(file.Header.OffsetToPoints)
+
+	pointOffset := int64(recordLength) * int64(chunk.Start)
+
+	delta := int64(chunk.End) - int64(chunk.Start)
+
+	chunkLength := delta * int64(file.Header.PointRecordLength)
+
+	rawBytes := make([]byte, chunkLength)
+
+	_, err := file.RawFile.ReadAt(rawBytes, offset + pointOffset)
+
+	if err != nil && err != io.EOF {
+		panic(err)
+	}
+
+	return rawBytes
 }
 
 // Divides a LAS file into chunks for processing
@@ -48,9 +71,7 @@ type LASProcessor[T any] interface {
 
 // Distributes the provided chunks over the provided channel, then sends nil
 func distributeChunks(chunks []*LASChunk, output chan<- *LASChunk, concurrency int) {
-	for i, chunk := range chunks {
-		s := "Beginning Chunk: " + fmt.Sprint(i)
-		println(s)
+	for _, chunk := range chunks {
 		output <- chunk
 	}
 	for i := 0; i < concurrency; i++ {

@@ -64,29 +64,17 @@ type VoxelSetProcessor struct {
 }
 
 // Reads the point data for a single point
-func readPointData(inputFile *lidarioMod.LasFile, point int) (float64, float64, float64) {
+func readPointData(inputFile *lidarioMod.LasFile, chunk *lasProcessing.LASChunk, rawBytes []byte, point int) (float64, float64, float64) {
 
 	recordLength := inputFile.Header.PointRecordLength
 
-	offset := int64(inputFile.Header.OffsetToPoints)
+	pointOffset := int64(recordLength) * int64(point - chunk.Start)
 
-	pointOffset := int64(recordLength) * int64(point)
-
-	rawBytes := make([]byte, recordLength)
-
-	inputFile.RawFile.ReadAt(rawBytes, offset + pointOffset)
-
-	var x float64 
-	var y float64
-	var z float64
-
-	byteOffset := 0
-
-	x = float64(int32(binary.LittleEndian.Uint32(rawBytes[byteOffset:byteOffset+4])))*inputFile.Header.XScaleFactor + inputFile.Header.XOffset
-	byteOffset += 4
-	y = float64(int32(binary.LittleEndian.Uint32(rawBytes[byteOffset:byteOffset+4])))*inputFile.Header.YScaleFactor + inputFile.Header.YOffset
-	byteOffset += 4
-	z = float64(int32(binary.LittleEndian.Uint32(rawBytes[byteOffset:byteOffset+4])))*inputFile.Header.ZScaleFactor + inputFile.Header.ZOffset
+	x := float64(int32(binary.LittleEndian.Uint32(rawBytes[pointOffset:pointOffset+4])))*inputFile.Header.XScaleFactor + inputFile.Header.XOffset
+	pointOffset += 4
+	y := float64(int32(binary.LittleEndian.Uint32(rawBytes[pointOffset:pointOffset+4])))*inputFile.Header.YScaleFactor + inputFile.Header.YOffset
+	pointOffset += 4
+	z := float64(int32(binary.LittleEndian.Uint32(rawBytes[pointOffset:pointOffset+4])))*inputFile.Header.ZScaleFactor + inputFile.Header.ZOffset
 
 	return x, y, z
 }
@@ -97,8 +85,10 @@ func(processor *VoxelSetProcessor) Process(inputFile *lidarioMod.LasFile, chunk 
 	
 	minX, minY, minZ := inputFile.Header.MinX, inputFile.Header.MinY, inputFile.Header.MinZ
 
+	rawBytes := chunk.ReadOnFile(inputFile)
+
 	for i := chunk.Start; i < chunk.End; i++ {
-		x, y, z := readPointData(inputFile, i)
+		x, y, z := readPointData(inputFile, chunk, rawBytes, i)
 		
 		coordinate := pointToCoordinate(x, minX, y, minY, z, minZ, voxelSize)
 
