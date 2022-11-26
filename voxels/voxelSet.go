@@ -1,7 +1,9 @@
-package main
+package voxels
 
 import (
 	"math"
+
+	"github.com/Jacob4649/go-voxelize/go-voxelize/lasProcessing"
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/jblindsay/lidario"
@@ -61,12 +63,12 @@ type VoxelSetProcessor struct {
 }
 
 // Processes a chunk of a LAS file into a VoxelSet
-func(processor *VoxelSetProcessor) Process(inputFile *lidario.LasFile, chunk *LASChunk, voxelSize float64, output chan<- *VoxelSet) {
+func(processor *VoxelSetProcessor) Process(inputFile *lidario.LasFile, chunk *lasProcessing.LASChunk, voxelSize float64, output chan<- *VoxelSet) {
 	voxels := &VoxelSet{Voxels: mapset.NewThreadUnsafeSet[Coordinate]()}
 	
 	minX, minY, minZ := inputFile.Header.MinX, inputFile.Header.MinY, inputFile.Header.MinZ
 
-	for i := chunk.start; i < chunk.end; i++ {
+	for i := chunk.Start; i < chunk.End; i++ {
 		point, err := inputFile.LasPoint(i)
 		
 		// exit on error

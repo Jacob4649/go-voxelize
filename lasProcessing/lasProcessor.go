@@ -1,4 +1,4 @@
-package main
+package lasProcessing
 
 import (
 	"github.com/jblindsay/lidario"
@@ -8,10 +8,10 @@ import (
 type LASChunk struct {
 	
 	// Start of the LAS chunk
-	start int
+	Start int
 
 	// End of the LAS chunk
-	end int
+	End int
 }
 
 // Divides a LAS file into chunks for processing
@@ -22,11 +22,11 @@ func ChunkFile(file *lidario.LasFile, numChunks int) []*LASChunk {
 
 	for i := 1; i < numChunks; i++ { // iterate for one less than numChunks
 		start := (i-1) * chunkSize
-		chunks = append(chunks, &LASChunk{start: start, end: start + chunkSize})
+		chunks = append(chunks, &LASChunk{Start: start, End: start + chunkSize})
 	}
 
 	// final chunk
-	chunks = append(chunks, &LASChunk{start: (numChunks - 1) * chunkSize, end: file.Header.NumberPoints})
+	chunks = append(chunks, &LASChunk{Start: (numChunks - 1) * chunkSize, End: file.Header.NumberPoints})
 
 	return chunks
 }
