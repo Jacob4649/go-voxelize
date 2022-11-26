@@ -38,7 +38,7 @@ type LASProcessor[T any] interface {
 	Process(inputFile *lidario.LasFile, chunk *LASChunk, voxelSize float64, output chan<- *T)
 
 	// Gets the default state of the output object
-	EmptyOutput() *T
+	EmptyOutput(inputFile *lidario.LasFile, voxelSize float64) *T
 
 	// Combines output objects
 	CombineOutput(base *T, incoming *T) *T
@@ -64,7 +64,7 @@ func handleConcurrentProcess[T any](inputFile *lidario.LasFile, inputChunk <-cha
 
 // Concurrently processes a LAS file into voxels in the specified output format
 func ConcurrentProcess[T any](inputFile *lidario.LasFile, chunks []*LASChunk, processor LASProcessor[T], concurrency int, voxelSize float64) *T {
-	output := processor.EmptyOutput()
+	output := processor.EmptyOutput(inputFile, voxelSize)
 
 	outputChannel := make(chan *T)
 
@@ -89,7 +89,7 @@ func ConcurrentProcess[T any](inputFile *lidario.LasFile, chunks []*LASChunk, pr
 
 // Processes a LAS file sequentially
 func SequentialProcess[T any](inputFile *lidario.LasFile, chunks []*LASChunk, processor LASProcessor[T], voxelSize float64) *T {
-	output := processor.EmptyOutput()
+	output := processor.EmptyOutput(inputFile, voxelSize)
 
 	for _, chunk := range chunks {
 		channel := make(chan *T)
