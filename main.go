@@ -75,11 +75,11 @@ func postNormalizeHeights(voxelSet *voxels.VoxelSet) *voxels.VoxelSet {
 		xy := XYPair{X: voxel.X, Y: voxel.Y}
 		min, contains := minHeights[xy]
 		if contains {
-			if voxel.Y < min {
-				minHeights[xy] = voxel.Y
+			if voxel.Z < min {
+				minHeights[xy] = voxel.Z
 			}
 		} else {
-			minHeights[xy] = voxel.Y
+			minHeights[xy] = voxel.Z
 		}
 
 		current += 1
@@ -102,7 +102,7 @@ func postNormalizeHeights(voxelSet *voxels.VoxelSet) *voxels.VoxelSet {
 		xy := XYPair{X: voxel.X, Y: voxel.Y}
 		min := minHeights[xy]
 		
-		voxel.Y -= min
+		voxel.Z -= min
 		newVoxelSet.Add(voxel)
 
 		current += 1
