@@ -80,7 +80,10 @@ func readPointData(inputFile *lidarioMod.LasFile, chunk *lasProcessing.LASChunk,
 }
 
 // Processes a chunk of a LAS file into a VoxelSet
-func(processor *VoxelSetProcessor) Process(inputFile *lidarioMod.LasFile, chunk *lasProcessing.LASChunk, voxelSize float64, output chan<- *VoxelSet) {
+func(processor *VoxelSetProcessor) Process(inputFile *lidarioMod.LasFile, chunk *lasProcessing.LASChunk, voxelSize float64, output chan<- *VoxelSet, status *float64) {
+	
+	*status = 0.0
+	
 	voxels := &VoxelSet{Voxels: mapset.NewThreadUnsafeSet[Coordinate]()}
 	
 	minX, minY, minZ := inputFile.Header.MinX, inputFile.Header.MinY, inputFile.Header.MinZ
@@ -92,8 +95,12 @@ func(processor *VoxelSetProcessor) Process(inputFile *lidarioMod.LasFile, chunk 
 		
 		coordinate := pointToCoordinate(x, minX, y, minY, z, minZ, voxelSize)
 
+		*status = float64(i - chunk.Start) / float64(chunk.End - chunk.Start)
+
 		voxels.Voxels.Add(coordinate)
 	}
+
+	*status = 1.0
 
 	output <- voxels
 }

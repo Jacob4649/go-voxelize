@@ -17,5 +17,8 @@
 # vs code
 .vscode
 
-# demo file
-DemoFile.las
+# las files
+*.las
+
+# csv files
+*.csv
