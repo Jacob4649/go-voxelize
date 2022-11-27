@@ -90,7 +90,7 @@ func writeToFile(voxels *voxels.VoxelSet, fileName string) error {
 // Main function
 func main() {
 
-	if len(os.Args) < 3 {
+	if len(os.Args) < 3 || len(os.Args) > 3 && len(os.Args) < 6 {
 		println("Usage: voxelize <input LAS path> <output CSV path> <optional chunk number> <optional concurrency> <optional density>")
 		println("Must specify chunk number, concurrency, and density to use any")
 		println("Default chunk number: 256")
