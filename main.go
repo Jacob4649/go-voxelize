@@ -97,7 +97,7 @@ func main() {
 		println("Default concurrency: 32")
 		println("Default density: 20")
 		println("Default voxel size: 0.1")
-		return
+		os.Exit(1)
 	}
 
 	fileName := os.Args[1]
@@ -130,7 +130,7 @@ func main() {
 
 		if err1 != nil || err2 != nil || err3 != nil || err4 != nil || chunkNumber <= 0 || concurrency <= 2 || density <= 1 || voxelSize <= 0 {
 			print("Error parsing chunk number, concurrency, or density. All must be integers (chunk number > 0, concurrency > 2, density > 1, voxel size > 0)")
-			return
+			os.Exit(1)
 		}
 	}
 
@@ -138,7 +138,7 @@ func main() {
 
 	if err != nil {
 		println("Error accessing LAS file")
-		return
+		os.Exit(1)
 	}
 
 	chunks := lasProcessing.ChunkFile(file, chunkNumber)
@@ -165,7 +165,7 @@ func main() {
 
 	if err != nil {
 		println("Error writing to csv")
-		return
+		os.Exit(1)
 	}
 
 	println("Written to csv")
