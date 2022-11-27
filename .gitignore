@@ -22,3 +22,6 @@
 
 # csv files
 *.csv
+
+# binary
+voxelize
