@@ -31,7 +31,7 @@ func cliStatusPanel(status *ConcurrentStatus) {
 		if *progress != 1.0 {
 			println(ProgressBarFloat("P" + fmt.Sprint(i), *progress))
 		} else {
-			println("P" + fmt.Sprint(i) + ":\tMerging")
+			println("\033[2K\rP" + fmt.Sprint(i) + ":\tMerging")
 		}
 	}
 }
