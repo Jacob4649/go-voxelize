@@ -1,7 +1,6 @@
 package voxels
 
 import (
-	"encoding/binary"
 	"math"
 
 	"github.com/Jacob4649/go-voxelize/go-voxelize/lasProcessing"
@@ -63,22 +62,6 @@ type VoxelSetProcessor struct {
 
 }
 
-// Reads the point data for a single point
-func readPointData(inputFile *lidarioMod.LasFile, chunk *lasProcessing.LASChunk, rawBytes []byte, point int) (float64, float64, float64) {
-
-	recordLength := inputFile.Header.PointRecordLength
-
-	pointOffset := int64(recordLength) * int64(point - chunk.Start)
-
-	x := float64(int32(binary.LittleEndian.Uint32(rawBytes[pointOffset:pointOffset+4])))*inputFile.Header.XScaleFactor + inputFile.Header.XOffset
-	pointOffset += 4
-	y := float64(int32(binary.LittleEndian.Uint32(rawBytes[pointOffset:pointOffset+4])))*inputFile.Header.YScaleFactor + inputFile.Header.YOffset
-	pointOffset += 4
-	z := float64(int32(binary.LittleEndian.Uint32(rawBytes[pointOffset:pointOffset+4])))*inputFile.Header.ZScaleFactor + inputFile.Header.ZOffset
-
-	return x, y, z
-}
-
 // Processes a chunk of a LAS file into a VoxelSet
 func(processor *VoxelSetProcessor) Process(inputFile *lidarioMod.LasFile, chunk *lasProcessing.LASChunk, voxelSize float64, output chan<- *VoxelSet, status *float64) {
 	
@@ -91,7 +74,7 @@ func(processor *VoxelSetProcessor) Process(inputFile *lidarioMod.LasFile, chunk 
 	rawBytes := chunk.ReadOnFile(inputFile)
 
 	for i := chunk.Start; i < chunk.End; i++ {
-		x, y, z := readPointData(inputFile, chunk, rawBytes, i)
+		x, y, z := lasProcessing.ReadPointData(inputFile, chunk, rawBytes, i)
 		
 		coordinate := pointToCoordinate(x, minX, y, minY, z, minZ, voxelSize)
 

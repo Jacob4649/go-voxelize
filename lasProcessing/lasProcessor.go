@@ -1,6 +1,7 @@
 package lasProcessing
 
 import (
+	"encoding/binary"
 	"io"
 
 	"github.com/Jacob4649/go-voxelize/go-voxelize/lidarioMod"
@@ -67,6 +68,22 @@ type LASProcessor[T any] interface {
 
 	// Combines output objects
 	CombineOutput(base *T, incoming *T) *T
+}
+
+// Reads the point data for a single point
+func ReadPointData(inputFile *lidarioMod.LasFile, chunk *LASChunk, rawBytes []byte, point int) (float64, float64, float64) {
+
+	recordLength := inputFile.Header.PointRecordLength
+
+	pointOffset := int64(recordLength) * int64(point - chunk.Start)
+
+	x := float64(int32(binary.LittleEndian.Uint32(rawBytes[pointOffset:pointOffset+4])))*inputFile.Header.XScaleFactor + inputFile.Header.XOffset
+	pointOffset += 4
+	y := float64(int32(binary.LittleEndian.Uint32(rawBytes[pointOffset:pointOffset+4])))*inputFile.Header.YScaleFactor + inputFile.Header.YOffset
+	pointOffset += 4
+	z := float64(int32(binary.LittleEndian.Uint32(rawBytes[pointOffset:pointOffset+4])))*inputFile.Header.ZScaleFactor + inputFile.Header.ZOffset
+
+	return x, y, z
 }
 
 // Distributes the provided chunks over the provided channel, then sends nil
