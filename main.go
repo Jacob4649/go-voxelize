@@ -49,6 +49,77 @@ func postProcess(densityVoxels *voxels.DensityVoxelSet) *voxels.VoxelSet {
 	return output
 }
 
+// Pair of x and y coordinates
+type XYPair struct {
+	
+	// X coordinate value
+	X int
+
+	// Y coordinate value
+	Y int
+}
+
+// normalizes heights after the fact (z is up)
+func postNormalizeHeights(voxelSet *voxels.VoxelSet) *voxels.VoxelSet {
+
+	// map xy to minimum z value
+	minHeights := make(map[XYPair]int)
+
+	total := voxelSet.Voxels.Cardinality()
+
+	current := 0
+
+	println(lasProcessing.ProgressBarInt("Finding minimums", current, total))
+
+	for voxel := range voxelSet.Voxels.Iterator().C {
+		xy := XYPair{X: voxel.X, Y: voxel.Y}
+		min, contains := minHeights[xy]
+		if contains {
+			if voxel.Y < min {
+				minHeights[xy] = voxel.Y
+			}
+		} else {
+			minHeights[xy] = voxel.Y
+		}
+
+		current += 1
+		if current % 500 == 0 {
+			print("\033[A\r")
+			println(lasProcessing.ProgressBarInt("Finding minimums", current, total))
+		}
+	}
+
+	print("\033[A\033[2K\r")
+	println("Finished finding minimums")
+
+	newVoxelSet := mapset.NewThreadUnsafeSet[voxels.Coordinate]()
+
+	current = 0
+
+	println(lasProcessing.ProgressBarInt("Normalizing", current, total))
+
+	for voxel := range voxelSet.Voxels.Iterator().C {
+		xy := XYPair{X: voxel.X, Y: voxel.Y}
+		min := minHeights[xy]
+		
+		voxel.Y -= min
+		newVoxelSet.Add(voxel)
+
+		current += 1
+		if current % 500 == 0 {
+			print("\033[A\r")
+			println(lasProcessing.ProgressBarInt("Normalizing", current, total))
+		}
+	}
+
+	print("\033[A\033[2K\r")
+	println("Finished normalizing")
+
+	voxelSet.Voxels = newVoxelSet
+	
+	return voxelSet
+}
+
 // Writes a set of voxels to a file
 func writeToFile(voxels *voxels.VoxelSet, fileName string) error {
 	file, err := os.Create(fileName)
@@ -161,6 +232,8 @@ func main() {
 
 	voxelSetOutput := postProcess(output)
 
+	// voxelSetOutput = postNormalizeHeights(voxelSetOutput)
+	
 	err = writeToFile(voxelSetOutput, destName)
 
 	if err != nil {
