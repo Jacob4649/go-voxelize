@@ -118,10 +118,15 @@ func main() {
 		densityString := os.Args[5]
 		voxelSizeString := os.Args[6]
 
-		chunkNumber, err1 := strconv.Atoi(chunkString)
-		concurrency, err2 := strconv.Atoi(concurrencyString)
-		density, err3 := strconv.Atoi(densityString)
-		voxelSize, err4 := strconv.ParseFloat(voxelSizeString, 64)
+		var err1 error
+		var err2 error
+		var err3 error
+		var err4 error
+
+		chunkNumber, err1 = strconv.Atoi(chunkString)
+		concurrency, err2 = strconv.Atoi(concurrencyString)
+		density, err3 = strconv.Atoi(densityString)
+		voxelSize, err4 = strconv.ParseFloat(voxelSizeString, 64)
 
 		if err1 != nil || err2 != nil || err3 != nil || err4 != nil || chunkNumber <= 0 || concurrency <= 2 || density <= 1 || voxelSize <= 0 {
 			print("Error parsing chunk number, concurrency, or density. All must be integers (chunk number > 0, concurrency > 2, density > 1, voxel size > 0)")
