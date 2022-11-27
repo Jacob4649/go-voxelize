@@ -28,7 +28,11 @@ func ProgressBarFloat(name string, progress float64) string {
 func cliStatusPanel(status *ConcurrentStatus) {
 	println(ProgressBarInt("CKS", *(status.CurrentChunk), *(status.TotalChunks)));
 	for i, progress := range status.ChunkProgress {
-		println(ProgressBarFloat("P" + fmt.Sprint(i), *progress))
+		if *progress != 1.0 {
+			println(ProgressBarFloat("P" + fmt.Sprint(i), *progress))
+		} else {
+			println("P" + fmt.Sprint(i) + ": Merging")
+		}
 	}
 }
 
