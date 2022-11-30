@@ -65,7 +65,7 @@ func main() {
 
 	chunks := lasProcessing.ChunkFile(file, chunkNumber)
 
-	processor := voxels.DensityVoxelSetProcessor{PointDensity: density}
+	processor := voxels.DensityVoxelSetProcessor{PointDensity: density, VoxelSize: voxelSize}
 
 	status := lasProcessing.NewConcurrentStatus()
 
@@ -75,7 +75,7 @@ func main() {
 
 	go lasProcessing.CLIStatus(status, &quit, uiDone)
 
-	output := lasProcessing.ConcurrentProcess[voxels.DensityVoxelSet](file, chunks, &processor, concurrency, voxelSize, status)
+	output := lasProcessing.ConcurrentProcess[voxels.DensityVoxelSet](file, chunks, &processor, concurrency, status)
 
 	quit = true
 

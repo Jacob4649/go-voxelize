@@ -61,10 +61,10 @@ func ChunkFile(file *lidarioMod.LasFile, numChunks int) []*LASChunk {
 type LASProcessor[T any] interface {
 
 	// Processes a chunk of the given LAS file
-	Process(inputFile *lidarioMod.LasFile, chunk *LASChunk, voxelSize float64, output chan<- *T, status *float64)
+	Process(inputFile *lidarioMod.LasFile, chunk *LASChunk, output chan<- *T, status *float64)
 
 	// Gets the default state of the output object
-	EmptyOutput(inputFile *lidarioMod.LasFile, voxelSize float64) *T
+	EmptyOutput(inputFile *lidarioMod.LasFile) *T
 
 	// Combines output objects
 	CombineOutput(base *T, incoming *T) *T
@@ -99,10 +99,10 @@ func distributeChunks(chunks []*LASChunk, output chan<- *LASChunk, concurrency i
 }
 
 // Concurrently processes some chunks
-func handleConcurrentProcess[T any](inputFile *lidarioMod.LasFile, inputChunk <-chan *LASChunk, processor LASProcessor[T], voxelSize float64, output chan<- *T, status *float64) {
+func handleConcurrentProcess[T any](inputFile *lidarioMod.LasFile, inputChunk <-chan *LASChunk, processor LASProcessor[T], output chan<- *T, status *float64) {
 	// for non nil input chunks
 	for chunk := <- inputChunk; chunk != nil; chunk = <- inputChunk {
-		processor.Process(inputFile, chunk, voxelSize, output, status)
+		processor.Process(inputFile, chunk, output, status)
 	}
 }
 
@@ -149,7 +149,7 @@ func NewConcurrentStatus() *ConcurrentStatus {
 }
 
 // Concurrently processes a LAS file into voxels in the specified output format
-func ConcurrentProcess[T any](inputFile *lidarioMod.LasFile, chunks []*LASChunk, processor LASProcessor[T], concurrency int, voxelSize float64, status *ConcurrentStatus) *T {
+func ConcurrentProcess[T any](inputFile *lidarioMod.LasFile, chunks []*LASChunk, processor LASProcessor[T], concurrency int, status *ConcurrentStatus) *T {
 	
 	if status == nil {
 		status = NewConcurrentStatus()
@@ -165,7 +165,7 @@ func ConcurrentProcess[T any](inputFile *lidarioMod.LasFile, chunks []*LASChunk,
 	}
 
 
-	output := processor.EmptyOutput(inputFile, voxelSize)
+	output := processor.EmptyOutput(inputFile)
 
 	outputChannel := make(chan *T)
 
@@ -176,7 +176,7 @@ func ConcurrentProcess[T any](inputFile *lidarioMod.LasFile, chunks []*LASChunk,
 
 	// start processing goroutines
 	for i := 0; i < concurrency; i++ {
-		go handleConcurrentProcess(inputFile, chunkChannel, processor, voxelSize, outputChannel, status.ChunkProgress[i])
+		go handleConcurrentProcess(inputFile, chunkChannel, processor, outputChannel, status.ChunkProgress[i])
 	}
 
 	// collect outputs, stop when all have been read
@@ -202,13 +202,13 @@ func SequentialProcess[T any](inputFile *lidarioMod.LasFile, chunks []*LASChunk,
 		chunkProgress = &x
 	}
 	
-	output := processor.EmptyOutput(inputFile, voxelSize)
+	output := processor.EmptyOutput(inputFile)
 
 	*currentChunk = 0
 
 	for _, chunk := range chunks {
 		channel := make(chan *T)
-		processor.Process(inputFile, chunk, voxelSize, channel, chunkProgress)
+		processor.Process(inputFile, chunk, channel, chunkProgress)
 		sequentialOutput := <- channel
 		output = processor.CombineOutput(output, sequentialOutput)
 		*currentChunk += 1

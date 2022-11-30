@@ -12,11 +12,13 @@ import (
 // Processes LAS files into VoxelSets
 type VoxelSetProcessor struct {
 	
+	// Voxel size to use with this processor
+	VoxelSize float64
 
 }
 
 // Processes a chunk of a LAS file into a VoxelSet
-func(processor *VoxelSetProcessor) Process(inputFile *lidarioMod.LasFile, chunk *lasProcessing.LASChunk, voxelSize float64, output chan<- *VoxelSet, status *float64) {
+func(processor *VoxelSetProcessor) Process(inputFile *lidarioMod.LasFile, chunk *lasProcessing.LASChunk, output chan<- *VoxelSet, status *float64) {
 	
 	*status = 0.0
 	
@@ -29,7 +31,7 @@ func(processor *VoxelSetProcessor) Process(inputFile *lidarioMod.LasFile, chunk 
 	for i := chunk.Start; i < chunk.End; i++ {
 		x, y, z := lasProcessing.ReadPointData(inputFile, chunk, rawBytes, i)
 		
-		coordinate := PointToCoordinate(x, minX, y, minY, z, minZ, voxelSize)
+		coordinate := PointToCoordinate(x, minX, y, minY, z, minZ, processor.VoxelSize)
 
 		*status = float64(i - chunk.Start) / float64(chunk.End - chunk.Start)
 
@@ -42,15 +44,15 @@ func(processor *VoxelSetProcessor) Process(inputFile *lidarioMod.LasFile, chunk 
 }
 
 // Gets an empty VoxelSet
-func(processor *VoxelSetProcessor) EmptyOutput(inputFile *lidarioMod.LasFile, voxelSize float64) *VoxelSet {
+func(processor *VoxelSetProcessor) EmptyOutput(inputFile *lidarioMod.LasFile) *VoxelSet {
 	
 	header := inputFile.Header
 
 	xSizeRaw, ySizeRaw, zSizeRaw := header.MaxX - header.MinX, header.MaxY - header.MinY, header.MaxZ - header.MinZ
 
-	xRemainder, yRemainder, zRemainder := math.Mod(xSizeRaw, voxelSize), math.Mod(ySizeRaw, voxelSize), math.Mod(zSizeRaw, voxelSize)
+	xRemainder, yRemainder, zRemainder := math.Mod(xSizeRaw, processor.VoxelSize), math.Mod(ySizeRaw, processor.VoxelSize), math.Mod(zSizeRaw, processor.VoxelSize)
 
-	xVoxels, yVoxels, zVoxels := int(xSizeRaw / voxelSize), int(ySizeRaw / voxelSize), int(zSizeRaw / voxelSize)
+	xVoxels, yVoxels, zVoxels := int(xSizeRaw / processor.VoxelSize), int(ySizeRaw / processor.VoxelSize), int(zSizeRaw / processor.VoxelSize)
 
 	if (xRemainder != 0) {
 		xVoxels += 1
@@ -64,7 +66,7 @@ func(processor *VoxelSetProcessor) EmptyOutput(inputFile *lidarioMod.LasFile, vo
 		zVoxels += 1
 	}
 
-	xSize, ySize, zSize := float64(xVoxels) * voxelSize, float64(yVoxels) * voxelSize, float64(zVoxels) * voxelSize
+	xSize, ySize, zSize := float64(xVoxels) * processor.VoxelSize, float64(yVoxels) * processor.VoxelSize, float64(zVoxels) * processor.VoxelSize
 
 	voxels := mapset.NewThreadUnsafeSet[Coordinate]()
 
