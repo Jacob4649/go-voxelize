@@ -50,9 +50,8 @@ func CLIStatus(status *ConcurrentStatus, quit *bool, uiDone chan<- bool) {
 }
 
 // Writes pipeline status to the screen
-func pipelineStatus(status *PipelineStatus, prevStep string) {
+func pipelineStatus(status *PipelineStatus, prevStep string) bool {
 	if status.Step != prevStep && prevStep != "" {
-		print("\033[A\033[2K\r")
 		println("Finished " + strings.ToLower(prevStep))
 	}
 	
@@ -61,23 +60,23 @@ func pipelineStatus(status *PipelineStatus, prevStep string) {
 			// finished
 			println("Finished post processing")	
 		}
-		return
-	}
-
-	if prevStep != "" && status.Step == prevStep {
-		print("\033[A\033[2K\r")
+		return false
 	}
 
 	println(ProgressBarFloat(status.Step, status.Progress))
+	return true
 }
 
 // Displays the status of a PostProcessingStatus in the console
 func PostProcessingStatus(status *PipelineStatus, quit *bool, uiDone chan<- bool) {
 	prevStep := status.Step
-	pipelineStatus(status, prevStep)
+	prevWrite := pipelineStatus(status, prevStep)
 	for !*quit {
 		time.Sleep(200 * time.Millisecond)
-		pipelineStatus(status, prevStep)
+		if prevWrite {
+			print("\033[A\033[2K\r")
+		}
+		prevWrite = pipelineStatus(status, prevStep)
 		prevStep = status.Step
 	}
 	pipelineStatus(status, prevStep)
