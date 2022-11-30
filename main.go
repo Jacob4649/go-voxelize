@@ -97,7 +97,7 @@ func mainProcessing[O any](file *lidarioMod.LasFile, processor lasProcessing.LAS
 
 	go lasProcessing.CLIStatus(status, &quit, uiDone)
 
-	output := lasProcessing.ConcurrentProcess[O](file, chunks, processor, config.concurrency, status)
+	output := lasProcessing.ConcurrentProcess(file, chunks, processor, config.concurrency, status)
 
 	quit = true
 
