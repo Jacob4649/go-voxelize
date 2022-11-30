@@ -9,11 +9,34 @@ import (
 	"github.com/Jacob4649/go-voxelize/go-voxelize/voxels"
 )
 
-// Main function
-func main() {
+// Arguments passed to run the program
+type executionArgs struct {
+	
+	// input file name
+	fileName string
 
-	if len(os.Args) < 3 || len(os.Args) > 3 && len(os.Args) < 7 {
-		println("Usage: voxelize <input LAS path> <output CSV path> <optional chunk number> <optional concurrency> <optional density> <optional voxel size>")
+	// output file name
+	destName string
+
+	// concurrency to use
+	concurrency int
+
+	// number of chunks
+	chunkNumber int
+
+	// density to use
+	density int
+
+	// voxel size to use
+	voxelSize float64
+}
+
+// parses the specified arguments
+func parseArgs(args []string) executionArgs {
+
+	if len(args) < 3 || len(args) > 3 && len(args) < 7 {
+		println("Usage: voxelize <input LAS path> <output CSV path> <optional chunk number> <optional concurrency> " +
+			"<optional density> <optional voxel size>")
 		println("Must specify chunk number, concurrency, density, and voxel size to use any")
 		println("Default chunk number: 256")
 		println("Default concurrency: 32")
@@ -22,9 +45,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	fileName := os.Args[1]
+	fileName := args[1]
 
-	destName := os.Args[2]
+	destName := args[2]
 
 	concurrency := 32
 
@@ -34,11 +57,11 @@ func main() {
 
 	voxelSize := 0.1
 
-	if len(os.Args) >= 7 {
-		chunkString := os.Args[3]
-		concurrencyString := os.Args[4]
-		densityString := os.Args[5]
-		voxelSizeString := os.Args[6]
+	if len(args) >= 7 {
+		chunkString := args[3]
+		concurrencyString := args[4]
+		densityString := args[5]
+		voxelSizeString := args[6]
 
 		var err1 error
 		var err2 error
@@ -50,22 +73,21 @@ func main() {
 		density, err3 = strconv.Atoi(densityString)
 		voxelSize, err4 = strconv.ParseFloat(voxelSizeString, 64)
 
-		if err1 != nil || err2 != nil || err3 != nil || err4 != nil || chunkNumber <= 0 || concurrency <= 2 || density <= 1 || voxelSize <= 0 {
-			print("Error parsing chunk number, concurrency, or density. All must be integers (chunk number > 0, concurrency > 2, density > 1, voxel size > 0)")
+		if err1 != nil || err2 != nil || err3 != nil || err4 != nil || chunkNumber <= 0 || concurrency <= 2 ||
+			density <= 1 || voxelSize <= 0 {
+			print("Error parsing chunk number, concurrency, or density. " +
+				"All must be integers (chunk number > 0, concurrency > 2, density > 1, voxel size > 0)")
 			os.Exit(1)
 		}
 	}
 
-	file, err := lidarioMod.NewLasFile(fileName, "rh")
+	return executionArgs{fileName: fileName, destName: destName, 
+		concurrency: concurrency, chunkNumber: chunkNumber, density: density, voxelSize: voxelSize}
+}
 
-	if err != nil {
-		println("Error accessing LAS file")
-		os.Exit(1)
-	}
-
-	chunks := lasProcessing.ChunkFile(file, chunkNumber)
-
-	processor := voxels.DensityVoxelSetProcessor{PointDensity: density, VoxelSize: voxelSize}
+// performs the main processing of the LAS file
+func mainProcessing[O any](file *lidarioMod.LasFile, processor lasProcessing.LASProcessor[O], config executionArgs) *O {
+	chunks := lasProcessing.ChunkFile(file, config.chunkNumber)
 
 	status := lasProcessing.NewConcurrentStatus()
 
@@ -75,29 +97,58 @@ func main() {
 
 	go lasProcessing.CLIStatus(status, &quit, uiDone)
 
-	output := lasProcessing.ConcurrentProcess[voxels.DensityVoxelSet](file, chunks, &processor, concurrency, status)
+	output := lasProcessing.ConcurrentProcess[O](file, chunks, processor, config.concurrency, status)
 
 	quit = true
 
 	<- uiDone
 
-	// post processing
+	return output
+}
 
+// post processes the resulting voxels
+func postProcessing[I any, O any](voxels I, pipeline lasProcessing.PostProcessingPipeline[I, O], config executionArgs) O {
 	pipelineStatus := &lasProcessing.PipelineStatus{}
 
-	quit = false
+	quit := false
 
-	uiDone = make(chan bool)
+	uiDone := make(chan bool)
 
 	go lasProcessing.PostProcessingStatus(pipelineStatus, &quit, uiDone)
 
-	pipeline := lasProcessing.ChainPipeline[*voxels.DensityVoxelSet, *voxels.VoxelSet, error](&voxels.VoxelCondenser{Density: density}, &voxels.VoxelFileWriter{FileName: destName})
-
-	err = lasProcessing.ProcessWithPipeline(output, pipeline, pipelineStatus)
+	err := lasProcessing.ProcessWithPipeline(voxels, pipeline, pipelineStatus)
 
 	quit = true
 
 	<- uiDone
+
+	return err
+}
+
+// Main function
+func main() {
+
+	config := parseArgs(os.Args)
+
+	file, err := lidarioMod.NewLasFile(config.fileName, "rh")
+
+	if err != nil {
+		println("Error accessing LAS file")
+		os.Exit(1)
+	}
+
+	// main processing
+
+	processor := voxels.DensityVoxelSetProcessor{PointDensity: config.density, VoxelSize: config.voxelSize}
+
+	output := mainProcessing[voxels.DensityVoxelSet](file, &processor, config)
+
+	// post processing
+
+	pipeline := lasProcessing.ChainPipeline[*voxels.DensityVoxelSet, *voxels.VoxelSet, error](
+		&voxels.VoxelCondenser{Density: config.density}, &voxels.VoxelFileWriter{FileName: config.destName})
+
+	err = postProcessing(output, pipeline, config)
 
 	// processing finished
 	
