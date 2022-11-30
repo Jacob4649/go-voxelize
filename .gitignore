@@ -25,3 +25,6 @@
 
 # binary
 voxelize
+
+# images
+*.png
