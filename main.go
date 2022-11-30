@@ -1,162 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 
 	"github.com/Jacob4649/go-voxelize/go-voxelize/lasProcessing"
 	"github.com/Jacob4649/go-voxelize/go-voxelize/lidarioMod"
 	"github.com/Jacob4649/go-voxelize/go-voxelize/voxels"
-	mapset "github.com/deckarep/golang-set/v2"
 )
-
-// Post processes a DensityVoxelSet into a VoxelSet
-func postProcess(densityVoxels *voxels.DensityVoxelSet) *voxels.VoxelSet {
-
-	voxelSet := mapset.NewThreadUnsafeSet[voxels.Coordinate]()
-
-	total := len(densityVoxels.Voxels)
-
-	current := 0
-
-	println(lasProcessing.ProgressBarInt("Post", current, total))
-
-	for voxel, density := range densityVoxels.Voxels {
-
-		if density >= densityVoxels.PointDensity {
-			voxelSet.Add(voxel)
-		}
-
-		current += 1
-		if current % 500 == 0 {
-			print("\033[A\r")
-			println(lasProcessing.ProgressBarInt("Post", current, total))
-		}
-	}
-
-	print("\033[A\033[2K\r")
-	println("Finished postprocessing")
-
-	output := &voxels.VoxelSet{XSize: densityVoxels.XSize, 
-		YSize: densityVoxels.YSize,
-		ZSize: densityVoxels.ZSize,
-		XVoxels: densityVoxels.XVoxels,
-		YVoxels: densityVoxels.YVoxels,
-		ZVoxels: densityVoxels.ZVoxels,
-		Voxels: voxelSet}
-
-	return output
-}
-
-// Pair of x and y coordinates
-type XYPair struct {
-	
-	// X coordinate value
-	X int
-
-	// Y coordinate value
-	Y int
-}
-
-// normalizes heights after the fact (z is up)
-func postNormalizeHeights(voxelSet *voxels.VoxelSet) *voxels.VoxelSet {
-
-	// map xy to minimum z value
-	minHeights := make(map[XYPair]int)
-
-	total := voxelSet.Voxels.Cardinality()
-
-	current := 0
-
-	println(lasProcessing.ProgressBarInt("Finding minimums", current, total))
-
-	for voxel := range voxelSet.Voxels.Iterator().C {
-		xy := XYPair{X: voxel.X, Y: voxel.Y}
-		min, contains := minHeights[xy]
-		if contains {
-			if voxel.Z < min {
-				minHeights[xy] = voxel.Z
-			}
-		} else {
-			minHeights[xy] = voxel.Z
-		}
-
-		current += 1
-		if current % 500 == 0 {
-			print("\033[A\r")
-			println(lasProcessing.ProgressBarInt("Finding minimums", current, total))
-		}
-	}
-
-	print("\033[A\033[2K\r")
-	println("Finished finding minimums")
-
-	newVoxelSet := mapset.NewThreadUnsafeSet[voxels.Coordinate]()
-
-	current = 0
-
-	println(lasProcessing.ProgressBarInt("Normalizing", current, total))
-
-	for voxel := range voxelSet.Voxels.Iterator().C {
-		xy := XYPair{X: voxel.X, Y: voxel.Y}
-		min := minHeights[xy]
-		
-		voxel.Z -= min
-		newVoxelSet.Add(voxel)
-
-		current += 1
-		if current % 500 == 0 {
-			print("\033[A\r")
-			println(lasProcessing.ProgressBarInt("Normalizing", current, total))
-		}
-	}
-
-	print("\033[A\033[2K\r")
-	println("Finished normalizing")
-
-	voxelSet.Voxels = newVoxelSet
-	
-	return voxelSet
-}
-
-// Writes a set of voxels to a file
-func writeToFile(voxels *voxels.VoxelSet, fileName string) error {
-	file, err := os.Create(fileName)
-
-	if err != nil {
-		return err
-	}
-
-	defer file.Close()
-
-	file.WriteString("x,y,z\n")
-
-	total := voxels.Voxels.Cardinality()
-
-	current := 0
-
-	println(lasProcessing.ProgressBarInt("Writing", current, total))
-
-	for voxel := range voxels.Voxels.Iterator().C {
-		_, err = file.WriteString(fmt.Sprint(voxel.X) + "," +fmt.Sprint(voxel.Y) + "," + fmt.Sprint(voxel.Z) + "\n")
-
-		if err != nil {
-			return err
-		}
-
-		current += 1
-		if current % 500 == 0 {
-			print("\033[A\r")
-			println(lasProcessing.ProgressBarInt("Writing", current, total))
-		}
-	}
-
-	print("\033[A\033[2K\r")
-	println("Finished writing")
-
-	return nil
-}
 
 // Main function
 func main() {
@@ -230,16 +81,30 @@ func main() {
 
 	<- uiDone
 
-	voxelSetOutput := postProcess(output)
+	// post processing
 
-	// voxelSetOutput = postNormalizeHeights(voxelSetOutput)
+	pipelineStatus := &lasProcessing.PipelineStatus{}
+
+	quit = false
+
+	uiDone = make(chan bool)
+
+	go lasProcessing.PostProcessingStatus(pipelineStatus, &quit, uiDone)
+
+	pipeline := lasProcessing.ChainPipeline[*voxels.DensityVoxelSet, *voxels.VoxelSet, error](&voxels.VoxelCondenser{Density: density}, &voxels.VoxelFileWriter{FileName: destName})
+
+	err = lasProcessing.ProcessWithPipeline(output, pipeline, pipelineStatus)
+
+	quit = true
+
+	<- uiDone
+
+	// processing finished
 	
-	err = writeToFile(voxelSetOutput, destName)
-
 	if err != nil {
 		println("Error writing to csv")
 		os.Exit(1)
 	}
 
-	println("Written to csv")
+	println("Complete")
 }

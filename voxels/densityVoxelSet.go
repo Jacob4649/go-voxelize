@@ -5,6 +5,7 @@ import (
 
 	"github.com/Jacob4649/go-voxelize/go-voxelize/lasProcessing"
 	"github.com/Jacob4649/go-voxelize/go-voxelize/lidarioMod"
+	mapset "github.com/deckarep/golang-set/v2"
 )
 
 // Type of a collection of voxels
@@ -124,4 +125,41 @@ func(processor *DensityVoxelSetProcessor) CombineOutput(base *DensityVoxelSet, i
 		}
 	}
 	return base
+}
+
+// A post processor to turn point densities into voxels
+type VoxelCondenser struct {
+	// the density required for a voxel
+	Density int
+}
+
+// Turns voxel density into voxels
+func(condenser *VoxelCondenser) Process(densityVoxels *DensityVoxelSet, status *lasProcessing.PipelineStatus) *VoxelSet {
+	voxelSet := mapset.NewThreadUnsafeSet[Coordinate]()
+
+	total := len(densityVoxels.Voxels)
+
+	current := 0
+
+	*status = lasProcessing.PipelineStatus{Step: "Condensing", Progress: 0.0}
+
+	for voxel, density := range densityVoxels.Voxels {
+
+		if density >= densityVoxels.PointDensity {
+			voxelSet.Add(voxel)
+		}
+
+		current += 1
+		*status = lasProcessing.PipelineStatus{Step: "Condensing", Progress: float64(current) / float64(total)}
+	}
+
+	output := &VoxelSet{XSize: densityVoxels.XSize, 
+		YSize: densityVoxels.YSize,
+		ZSize: densityVoxels.ZSize,
+		XVoxels: densityVoxels.XVoxels,
+		YVoxels: densityVoxels.YVoxels,
+		ZVoxels: densityVoxels.ZVoxels,
+		Voxels: voxelSet}
+
+	return output
 }

@@ -29,7 +29,7 @@ func cliStatusPanel(status *ConcurrentStatus) {
 	println(ProgressBarInt("CKS", *(status.CurrentChunk), *(status.TotalChunks)));
 	for i, progress := range status.ChunkProgress {
 		if *progress != 1.0 {
-			println(ProgressBarFloat("P" + fmt.Sprint(i), *progress))
+			println("\033[2K\rP" + ProgressBarFloat("P" + fmt.Sprint(i), *progress))
 		} else {
 			println("\033[2K\rP" + fmt.Sprint(i) + ":\tMerging")
 		}
@@ -46,5 +46,40 @@ func CLIStatus(status *ConcurrentStatus, quit *bool, uiDone chan<- bool) {
 	}
 	print(strings.Repeat("\033[A\033[2K\r", *(status.Concurrency) + 1))
 	println("Finished processing")
+	uiDone <- true
+}
+
+// Writes pipeline status to the screen
+func pipelineStatus(status *PipelineStatus, prevStep string) {
+	if status.Step != prevStep && prevStep != "" {
+		print("\033[A\033[2K\r")
+		println("Finished " + strings.ToLower(prevStep))
+	}
+	
+	if status.Step == "" {
+		if prevStep != "" {
+			// finished
+			println("Finished post processing")	
+		}
+		return
+	}
+
+	if prevStep != "" && status.Step == prevStep {
+		print("\033[A\033[2K\r")
+	}
+
+	println(ProgressBarFloat(status.Step, status.Progress))
+}
+
+// Displays the status of a PostProcessingStatus in the console
+func PostProcessingStatus(status *PipelineStatus, quit *bool, uiDone chan<- bool) {
+	prevStep := status.Step
+	pipelineStatus(status, prevStep)
+	for !*quit {
+		time.Sleep(200 * time.Millisecond)
+		pipelineStatus(status, prevStep)
+		prevStep = status.Step
+	}
+	pipelineStatus(status, prevStep)
 	uiDone <- true
 }
