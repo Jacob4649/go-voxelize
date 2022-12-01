@@ -137,3 +137,22 @@ func(processor *PointSourceProcessor) CombineOutput(base *PointSourceDensityVoxe
 
 	return base
 }
+
+// Splits a PointSourceVoxelSet into voxel sets
+type PointSourceSplitter struct {
+
+}
+
+// splits into density voxel sets
+func(splitter *PointSourceSplitter) Process(sourceVoxels *PointSourceDensityVoxelSet, status *lasProcessing.PipelineStatus) []*DensityVoxelSet {
+	sets := make([]*DensityVoxelSet, 0)
+
+	for _, voxels := range sourceVoxels.VoxelsBySource {
+		sets = append(sets, &DensityVoxelSet{PointDensity: sourceVoxels.PointDensity,
+			XVoxels: sourceVoxels.XVoxels, YVoxels: sourceVoxels.YVoxels, ZVoxels: sourceVoxels.ZVoxels,
+			XSize: sourceVoxels.XSize, YSize: sourceVoxels.YSize, ZSize: sourceVoxels.ZSize,
+			Voxels: voxels,})
+	}
+
+	return sets
+}

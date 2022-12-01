@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/Jacob4649/go-voxelize/go-voxelize/lasProcessing"
@@ -38,6 +39,9 @@ type executionArgs struct {
 
 	// where to output minimum heights
 	minimumImagePath string
+
+	// whether to split into sources
+	splitSources bool
 }
 
 // parses the specified arguments
@@ -57,7 +61,9 @@ func parseArgs() executionArgs {
 
 	gradient := flag.Bool("gradient", false, "whether to convert output to a height gradient")
 
-	minimumImagePath := flag.String("minimum-output", "", "file path to output the minimums image")
+	minimumImagePath := flag.String("minimum-output", "", "file path to output the PNG minimums image")
+
+	splitSources := flag.Bool("split-sources", false, "whether to split input by source before processing")
 
 	flag.Parse()
 
@@ -70,7 +76,7 @@ func parseArgs() executionArgs {
 
 	return executionArgs{fileName: fileName, destName: *destName, 
 		concurrency: *concurrency, chunkNumber: *chunkNumber, density: *density, voxelSize: *voxelSize,
-		normalize: *normalize, gradient: *gradient, minimumImagePath: *minimumImagePath}
+		normalize: *normalize, gradient: *gradient, minimumImagePath: *minimumImagePath, splitSources: *splitSources}
 }
 
 // performs the main processing of the LAS file
@@ -113,8 +119,8 @@ func postProcessing[I any, O any](voxels I, pipeline lasProcessing.PostProcessin
 	return err
 }
 
-/// selects a post processing pipeline to use
-func choosePipeline(config executionArgs) lasProcessing.PostProcessingPipeline[*voxels.DensityVoxelSet, error] {
+/// selects a post processing pipeline to use for density voxels
+func chooseDensityVoxelPipeline(config executionArgs) lasProcessing.PostProcessingPipeline[*voxels.DensityVoxelSet, error] {
 	var finalPipeline lasProcessing.PostProcessingPipeline[*voxels.DensityVoxelSet, error]
 	
 	var voxelPipeline lasProcessing.PostProcessingPipeline[*voxels.DensityVoxelSet, *voxels.VoxelSet] = 
@@ -155,6 +161,73 @@ func choosePipeline(config executionArgs) lasProcessing.PostProcessingPipeline[*
 	return finalPipeline
 }
 
+// processes some density voxels and outputs an error
+func processDensityVoxels(file *lidarioMod.LasFile, config executionArgs) error {
+		// main processing
+
+		processor := voxels.DensityVoxelSetProcessor{PointDensity: config.density, VoxelSize: config.voxelSize}
+
+		output := mainProcessing[voxels.DensityVoxelSet](file, &processor, config)
+	
+		// post processing
+	
+		pipeline := chooseDensityVoxelPipeline(config)
+	
+		return postProcessing(output, pipeline, config)
+}
+
+// makes pipelines for processing density voxel sets from different sources
+func makeSourcesPipelines(sets []*voxels.DensityVoxelSet, config executionArgs) ([]executionArgs, []lasProcessing.PostProcessingPipeline[*voxels.DensityVoxelSet, error]) {
+	configs := make([]executionArgs, 0)
+
+	for i, _ := range sets {
+		copy := config
+		copy.destName = fmt.Sprint(i) + "-" + copy.destName
+		if copy.minimumImagePath != "" {
+			copy.minimumImagePath = fmt.Sprint(i) + "-" + copy.minimumImagePath
+		}
+		configs = append(configs, copy)
+	}
+
+	pipelines := make([]lasProcessing.PostProcessingPipeline[*voxels.DensityVoxelSet, error], 0)
+
+	for _, pipelineConfig := range configs {
+		pipelines = append(pipelines, chooseDensityVoxelPipeline(pipelineConfig))
+	}
+
+	return configs, pipelines
+}
+
+// processes voxels by source and outputs an error
+func processSources(file *lidarioMod.LasFile, config executionArgs) {
+	// main processing
+	
+	processor := voxels.PointSourceProcessor{PointDensity: config.density, VoxelSize: config.voxelSize}
+
+	output := mainProcessing[voxels.PointSourceDensityVoxelSet](file, &processor, config)
+
+	// split into sets
+	
+	splitPipeline := voxels.PointSourceSplitter{}
+
+	sets := postProcessing[*voxels.PointSourceDensityVoxelSet, []*voxels.DensityVoxelSet](output, &splitPipeline, config)
+
+	// concurrent post processing
+
+	configs, pipelines := makeSourcesPipelines(sets, config)
+
+	for i, pipeline := range pipelines {
+		set := sets[i]
+		pipelineConfig := configs[i]
+		println("Processing source " + fmt.Sprint(i))
+
+		postProcessing(set, pipeline, pipelineConfig)
+
+		println("Completed processing source " + fmt.Sprint(i))
+	}
+
+}
+
 // Main function
 func main() {
 
@@ -167,17 +240,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	// main processing
-
-	processor := voxels.DensityVoxelSetProcessor{PointDensity: config.density, VoxelSize: config.voxelSize}
-
-	output := mainProcessing[voxels.DensityVoxelSet](file, &processor, config)
-
-	// post processing
-
-	pipeline := choosePipeline(config)
-
-	err = postProcessing(output, pipeline, config)
+	if config.splitSources {
+		processSources(file, config)
+	} else {
+		err = processDensityVoxels(file, config)
+	}
 
 	// processing finished
 	
