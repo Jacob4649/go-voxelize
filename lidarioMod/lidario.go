@@ -469,6 +469,24 @@ func (las *LasFile) readHeader() error {
 		las.Header.WaveformDataStart = binary.LittleEndian.Uint64(b[offset : offset+8])
 	}
 
+	// Intensity and userdata are both optional. Figure out if they need to be read.
+	// The only way to do this is to compare the point record length by point format
+	recLengths := [4][4]int{{20, 18, 19, 17}, {28, 26, 27, 25}, {26, 24, 25, 23}, {34, 32, 33, 31}}
+
+	if las.Header.PointRecordLength == recLengths[las.Header.PointFormatID][0] {
+		las.usePointIntensity = true
+		las.usePointUserdata = true
+	} else if las.Header.PointRecordLength == recLengths[las.Header.PointFormatID][1] {
+		las.usePointIntensity = false
+		las.usePointUserdata = true
+	} else if las.Header.PointRecordLength == recLengths[las.Header.PointFormatID][2] {
+		las.usePointIntensity = true
+		las.usePointUserdata = false
+	} else if las.Header.PointRecordLength == recLengths[las.Header.PointFormatID][3] {
+		las.usePointIntensity = false
+		las.usePointUserdata = false
+	}
+
 	return nil
 }
 
