@@ -86,6 +86,41 @@ func ReadPointData(inputFile *lidarioMod.LasFile, chunk *LASChunk, rawBytes []by
 	return x, y, z
 }
 
+// Gets the point source for a point
+func ReadPointSource(inputFile *lidarioMod.LasFile, chunk *LASChunk, rawBytes []byte, point int) int {
+
+	recordLength := inputFile.Header.PointRecordLength
+
+	pointOffset := int64(recordLength) * int64(point - chunk.Start)
+
+	pointEnd := pointOffset + int64(recordLength)
+
+	var pointSourceStart int64
+
+	switch inputFile.Header.PointFormatID {
+	default:
+	case 0:
+		pointSourceStart = pointEnd - 2
+		break
+
+	case 1:
+		pointSourceStart = pointEnd - 10
+		break
+
+	case 2:
+		pointSourceStart = pointEnd - 8
+		break
+
+	case 3:
+		pointSourceStart = pointEnd - 16
+		break
+	}
+
+	pointSource := binary.LittleEndian.Uint16(rawBytes[pointSourceStart:pointSourceStart+2])
+
+	return int(pointSource)
+}
+
 // Distributes the provided chunks over the provided channel, then sends nil
 func distributeChunks(chunks []*LASChunk, output chan<- *LASChunk, concurrency int, status *ConcurrentStatus) {
 	for i, chunk := range chunks {
