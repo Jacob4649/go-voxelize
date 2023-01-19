@@ -31,7 +31,7 @@ func(processor *VoxelSetProcessor) Process(inputFile *lidarioMod.LasFile, chunk 
 	for i := chunk.Start; i < chunk.End; i++ {
 		x, y, z := lasProcessing.ReadPointData(inputFile, chunk, rawBytes, i)
 		
-		coordinate := PointToCoordinate(x, minX, y, minY, z, minZ, processor.VoxelSize)
+		coordinate := PointToCoordinate(x, minX, y, minY, z, minZ, processor.VoxelSize, false)
 
 		*status = float64(i - chunk.Start) / float64(chunk.End - chunk.Start)
 

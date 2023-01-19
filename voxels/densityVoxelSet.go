@@ -36,14 +36,6 @@ type DensityVoxelSet struct {
 	Voxels map[Coordinate]int
 }
 
-// Converts a point to a voxel Coordinate
-func pointToCoordinate(x float64, minX float64, y float64, minY float64, z float64, minZ float64, voxelSize float64) Coordinate {
-	
-	deltaX, deltaY, deltaZ := x - minX, y - minY, z - minZ
-	
-	return Coordinate{X: int(deltaX / voxelSize), Y: int(deltaY / voxelSize), Z: int(deltaZ / voxelSize)}
-}
-
 // Processes LAS files into VoxelSets
 type DensityVoxelSetProcessor struct {
 	
@@ -69,7 +61,7 @@ func(processor *DensityVoxelSetProcessor) Process(inputFile *lidarioMod.LasFile,
 	for i := chunk.Start; i < chunk.End; i++ {
 		x, y, z := lasProcessing.ReadPointData(inputFile, chunk, rawBytes, i)
 		
-		coordinate := pointToCoordinate(x, minX, y, minY, z, minZ, processor.VoxelSize)
+		coordinate := PointToCoordinate(x, minX, y, minY, z, minZ, processor.VoxelSize, false)
 
 		*status = float64(i - chunk.Start) / float64(chunk.End - chunk.Start)
 

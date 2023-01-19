@@ -60,9 +60,15 @@ type HeightGradient struct {
 }
 
 // Converts a point to a voxel Coordinate
-func PointToCoordinate(x float64, minX float64, y float64, minY float64, z float64, minZ float64, voxelSize float64) Coordinate {
+func PointToCoordinate(x float64, minX float64, y float64, minY float64, z float64, minZ float64, voxelSize float64, zeroCoords bool) Coordinate {
 	
-	deltaX, deltaY, deltaZ := x - minX, y - minY, z - minZ
+	var deltaX, deltaY, deltaZ float64
+
+	if (zeroCoords) {
+		deltaX, deltaY, deltaZ = x - minX, y - minY, z - minZ
+	} else {
+		deltaX, deltaY, deltaZ = x, y, z
+	}
 	
 	return Coordinate{X: int(deltaX / voxelSize), Y: int(deltaY / voxelSize), Z: int(deltaZ / voxelSize)}
 }
