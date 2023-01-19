@@ -70,7 +70,7 @@ func parseArgs() executionArgs {
 	fileName := flag.Arg(0)
 
 	if fileName == "" {
-		print("must define an output file")
+		print("must define an input file")
 		os.Exit(0)
 	}
 
