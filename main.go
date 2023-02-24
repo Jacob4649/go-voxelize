@@ -37,6 +37,9 @@ type executionArgs struct {
 	// whether to convert to a gradient
 	gradient bool
 
+	// whether to convert to measurements
+	measurements bool
+
 	// where to output minimum heights
 	minimumImagePath string
 
@@ -61,6 +64,8 @@ func parseArgs() executionArgs {
 
 	gradient := flag.Bool("gradient", false, "whether to convert output to a height gradient")
 
+	measurements := flag.Bool("measurements", false, "whether to convert output to measurements")
+
 	minimumImagePath := flag.String("minimum-output", "", "file path to output the PNG minimums image")
 
 	splitSources := flag.Bool("split-sources", false, "whether to split input by source before processing")
@@ -76,7 +81,8 @@ func parseArgs() executionArgs {
 
 	return executionArgs{fileName: fileName, destName: *destName, 
 		concurrency: *concurrency, chunkNumber: *chunkNumber, density: *density, voxelSize: *voxelSize,
-		normalize: *normalize, gradient: *gradient, minimumImagePath: *minimumImagePath, splitSources: *splitSources}
+		normalize: *normalize, gradient: *gradient, minimumImagePath: *minimumImagePath, splitSources: *splitSources,
+		measurements: *measurements}
 }
 
 // performs the main processing of the LAS file
@@ -156,6 +162,12 @@ func chooseDensityVoxelPipeline(config executionArgs) lasProcessing.PostProcessi
 
 		finalPipeline = lasProcessing.ChainPipeline[*voxels.DensityVoxelSet, *voxels.HeightGradient, error](
 			gradientPipline, &voxels.GradientFileWriter{FileName: config.destName})
+	} else if config.measurements {
+		measurementPipeline := lasProcessing.ChainPipeline[*voxels.DensityVoxelSet, *voxels.VoxelSet, *voxels.Measurements](
+			voxelPipeline, &voxels.MeasurementFinder{})
+
+		finalPipeline = lasProcessing.ChainPipeline[*voxels.DensityVoxelSet, *voxels.Measurements, error](
+			measurementPipeline, &voxels.MeasurementsFileWriter{FileName: config.destName})
 	}
 
 	return finalPipeline

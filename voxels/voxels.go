@@ -59,6 +59,173 @@ type HeightGradient struct {
 
 }
 
+// A column of voxels
+type Column struct {
+
+	// a set of all the voxel heights in this column
+	Heights mapset.Set[int]
+
+	// the minimum height of a voxel in this column
+	MinHeight int
+
+	// the maximum height of a voxel in this column
+	MaxHeight int
+
+	// the approximate ground height, can be at most min height
+	GroundHeight int
+
+}
+
+// Creates a column of voxels with one voxel at the specified height
+func createColumn(height int) *Column {
+	return &Column{GroundHeight: height, MinHeight: height, MaxHeight: height, Heights: mapset.NewThreadUnsafeSet[int](height)}
+}
+
+// Adds a height to a column
+func(column *Column) addVoxel(height int) {
+	column.Heights.Add(height)
+
+	// ground height should really be independently set
+	if height < column.GroundHeight {
+		column.GroundHeight = height
+	}
+
+	if height < column.MinHeight {
+		column.MinHeight = height
+	}
+
+	if height > column.MaxHeight {
+		column.MaxHeight = height
+	}
+}
+
+// Gets the start and end of the longest empty sequence of voxels in a column
+func(column *Column) getLongestEmptySequence() (int, int) {
+	
+	// best start and end for interval, start is a filled voxel, end is the last empty
+	// end can be equal to start if no good intervals exist
+	bestStart, bestEnd := column.MinHeight, column.MinHeight
+	
+	// currently considered start of interval, should be a filled voxel
+	curStart := column.MinHeight
+
+	// in case the minimum is far above the ground
+	if column.GroundHeight < column.MinHeight {
+		bestStart, bestEnd = column.GroundHeight, column.MinHeight - 1
+	}
+
+	for i := column.MinHeight + 1; i < column.MaxHeight; i++ {
+		if column.Heights.Contains(i) {
+			// filled voxel
+			curStart = i
+		} else if i - curStart > bestEnd - bestStart {
+			// empty voxel longer than best interval
+			bestEnd = i
+			bestStart = curStart
+		}
+	}
+
+	return bestStart, bestEnd
+}
+
+// Finds measurements about each column
+type MeasurementFinder struct {
+	
+}
+
+// finds measurements
+func(finder *MeasurementFinder) Process(voxelSet *VoxelSet, status *lasProcessing.PipelineStatus) *Measurements {
+
+	// map xy to column of voxels
+	columns := make(map[XYPair]*Column)
+
+	// height of the ground to set for all columns
+	groundHeight := math.MaxInt64
+
+	total := voxelSet.Voxels.Cardinality()
+
+	current := 0
+
+	*status = lasProcessing.PipelineStatus{Step: "Columns", Progress: 0.0}
+
+	for voxel := range voxelSet.Voxels.Iterator().C {
+		xy := XYPair{X: voxel.X, Y: voxel.Y}
+		column, contains := columns[xy]
+		if contains {
+			column.addVoxel(voxel.Z)
+		} else {
+			columns[xy] = createColumn(voxel.Z)
+		}
+
+		if voxel.Z < groundHeight {
+			groundHeight = voxel.Z
+		}
+
+		current += 1
+		*status = lasProcessing.PipelineStatus{Step: "Columns", Progress: float64(current) / float64(total)}
+	}
+
+	*status = lasProcessing.PipelineStatus{Step: "Measuring", Progress: 0.0}
+
+	measurements := createMeasurements()
+	current = 0
+	total = len(columns)
+
+	for coords, column := range columns {
+
+		// measure the specified column
+		measurements.addColumn(column, coords)
+
+		current += 1
+		*status = lasProcessing.PipelineStatus{Step: "Measuring", Progress: float64(current) / float64(total)}
+	}
+
+	return measurements
+}
+
+// A collection of measurements over the 2D ground plane.
+// Measurements are calculated as per https://doi.org/10.1016/j.foreco.2021.119037.
+// All measurements are in voxels.
+type Measurements struct {
+
+	// map of the canopy base height at different points
+	CanopyBaseHeight map[XYPair]int
+
+	// map of the fuel strata gap at different points
+	FuelStrataGap map[XYPair]int
+
+	// map of the canopy height at different points
+	CanopyHeight map[XYPair]int
+
+	// map of the understory height at different points
+	UnderstoryHeight map[XYPair]int
+
+}
+
+// creates a new set of measurements
+func createMeasurements() *Measurements {
+	cbh := make(map[XYPair]int)
+	fsg := make(map[XYPair]int)
+	ch := make(map[XYPair]int)
+	uh := make(map[XYPair]int)
+	return &Measurements{CanopyBaseHeight: cbh, FuelStrataGap: fsg, CanopyHeight: ch, UnderstoryHeight: uh}
+}
+
+// adds the specified column to some measurements for the specified coordinates
+// that are not already contained in the measurements
+func(measurements *Measurements) addColumn(column *Column, coords XYPair) {
+	ch := column.MaxHeight + 1 // to account for voxel heights being measured from bottom left
+	uh, cbh := column.getLongestEmptySequence() // uh is filled, cbh is empty, both need to be increased by 1
+	uh += 1
+	cbh += 1
+	fsg := cbh - uh
+
+	measurements.CanopyHeight[coords] = ch
+	measurements.UnderstoryHeight[coords] = uh
+	measurements.CanopyBaseHeight[coords] = cbh
+	measurements.FuelStrataGap[coords] = fsg
+}
+
 // Converts a point to a voxel Coordinate
 func PointToCoordinate(x float64, minX float64, y float64, minY float64, z float64, minZ float64, voxelSize float64, zeroCoords bool) Coordinate {
 	
@@ -348,6 +515,57 @@ func(writer *GradientFileWriter) Process(gradient *HeightGradient, status *lasPr
 
 	for height, count := range gradient.Gradient {
 		_, err = file.WriteString(fmt.Sprint(height) + "," + fmt.Sprint(count) + "\n")
+
+		if err != nil {
+			return err
+		}
+
+		current += 1
+		*status = lasProcessing.PipelineStatus{Step: "Writing", Progress: float64(current) / float64(total)}
+	}
+
+	return nil
+}
+
+// writes measurements to a file
+type MeasurementsFileWriter struct {
+	// the name of the file to write to
+	FileName string
+}
+
+// Writes a set of measurements to a file
+func(writer *MeasurementsFileWriter) Process(measurements *Measurements, status *lasProcessing.PipelineStatus) error {
+	file, err := os.Create(writer.FileName)
+
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+
+	file.WriteString("x,y,understory_height,canopy_base_height,fuel_strata_gap,canopy_height\n")
+
+	total := len(measurements.CanopyBaseHeight)
+
+	current := 0
+
+	*status = lasProcessing.PipelineStatus{Step: "Writing", Progress: 0.0}
+
+	for coords := range measurements.CanopyBaseHeight {
+
+		x := coords.X
+		y := coords.Y
+		uh := measurements.UnderstoryHeight[coords]
+		cbh := measurements.CanopyBaseHeight[coords]
+		ch := measurements.CanopyHeight[coords]
+		fsg := measurements.FuelStrataGap[coords]
+
+		_, err = file.WriteString(fmt.Sprint(x) + "," + 
+			fmt.Sprint(y) + "," +
+			fmt.Sprint(uh) + "," +
+			fmt.Sprint(cbh) + "," +
+			fmt.Sprint(fsg) + "," +
+			fmt.Sprint(ch) + "\n")
 
 		if err != nil {
 			return err
