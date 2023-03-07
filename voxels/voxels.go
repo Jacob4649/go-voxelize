@@ -317,7 +317,7 @@ func writeMinimumHeights(filename string, heights *MinimumHeights, status *lasPr
 		// i := 255 - uint8(float64(min) / float64(voxels.ZVoxels) * 255)
 		// color := color.RGBA{R: i, G: i, B: i, A: 255}
 		
-		image.SetRGBA(point.X - voxels.XMin, point.Y - voxels.YMin, color)
+		image.SetRGBA(point.X - voxels.XMin, voxels.YVoxels - point.Y + voxels.YMin, color)
 
 		current += 1
 		*status = lasProcessing.PipelineStatus{Step: "Write min", Progress: float64(current) / float64(total)}
