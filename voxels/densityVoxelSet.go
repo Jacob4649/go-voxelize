@@ -63,9 +63,7 @@ func(processor *DensityVoxelSetProcessor) Process(inputFile *lidarioMod.LasFile,
 	
 	minX, minY, minZ := inputFile.Header.MinX, inputFile.Header.MinY, inputFile.Header.MinZ
 
-	minXVoxel, minYVoxel, minZVoxel := int(minX / processor.VoxelSize), int(minY / processor.VoxelSize), int(minZ / processor.VoxelSize)
-
-	voxels := &DensityVoxelSet{Voxels: make(map[Coordinate]int), XMin: minXVoxel, YMin: minYVoxel, ZMin: minZVoxel}
+	voxels := &DensityVoxelSet{Voxels: make(map[Coordinate]int)}
 	
 	rawBytes := chunk.ReadOnFile(inputFile)
 
@@ -115,9 +113,13 @@ func(processor *DensityVoxelSetProcessor) EmptyOutput(inputFile *lidarioMod.LasF
 
 	xSize, ySize, zSize := float64(xVoxels) * processor.VoxelSize, float64(yVoxels) * processor.VoxelSize, float64(zVoxels) * processor.VoxelSize
 
+	minX, minY, minZ := inputFile.Header.MinX, inputFile.Header.MinY, inputFile.Header.MinZ
+
+	minXVoxel, minYVoxel, minZVoxel := int(minX / processor.VoxelSize), int(minY / processor.VoxelSize), int(minZ / processor.VoxelSize)
+
 	voxels := make(map[Coordinate]int)
 
-	return &DensityVoxelSet{XSize: xSize, YSize: ySize, ZSize: zSize, XVoxels: xVoxels, YVoxels: yVoxels, ZVoxels: zVoxels, Voxels: voxels, PointDensity: processor.PointDensity}
+	return &DensityVoxelSet{XSize: xSize, YSize: ySize, ZSize: zSize, XVoxels: xVoxels, YVoxels: yVoxels, ZVoxels: zVoxels, Voxels: voxels, PointDensity: processor.PointDensity, XMin: minXVoxel, YMin: minYVoxel, ZMin: minZVoxel}
 }
 
 // Combines two VoxelSets
@@ -165,6 +167,9 @@ func(condenser *VoxelCondenser) Process(densityVoxels *DensityVoxelSet, status *
 		XVoxels: densityVoxels.XVoxels,
 		YVoxels: densityVoxels.YVoxels,
 		ZVoxels: densityVoxels.ZVoxels,
+		XMin: densityVoxels.XMin,
+		YMin: densityVoxels.YMin,
+		ZMin: densityVoxels.ZMin,
 		Voxels: voxelSet}
 
 	return output

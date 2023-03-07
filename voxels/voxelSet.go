@@ -70,9 +70,13 @@ func(processor *VoxelSetProcessor) EmptyOutput(inputFile *lidarioMod.LasFile) *V
 
 	xSize, ySize, zSize := float64(xVoxels) * processor.VoxelSize, float64(yVoxels) * processor.VoxelSize, float64(zVoxels) * processor.VoxelSize
 
+	minX, minY, minZ := inputFile.Header.MinX, inputFile.Header.MinY, inputFile.Header.MinZ
+
+	minXVoxel, minYVoxel, minZVoxel := int(minX / processor.VoxelSize), int(minY / processor.VoxelSize), int(minZ / processor.VoxelSize)
+
 	voxels := mapset.NewThreadUnsafeSet[Coordinate]()
 
-	return &VoxelSet{XSize: xSize, YSize: ySize, ZSize: zSize, XVoxels: xVoxels, YVoxels: yVoxels, ZVoxels: zVoxels, Voxels: voxels}
+	return &VoxelSet{XSize: xSize, YSize: ySize, ZSize: zSize, XVoxels: xVoxels, YVoxels: yVoxels, ZVoxels: zVoxels, Voxels: voxels, XMin: minXVoxel, YMin: minYVoxel, ZMin: minZVoxel}
 }
 
 // Combines two VoxelSets
