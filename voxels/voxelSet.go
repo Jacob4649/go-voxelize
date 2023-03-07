@@ -22,10 +22,12 @@ func(processor *VoxelSetProcessor) Process(inputFile *lidarioMod.LasFile, chunk 
 	
 	*status = 0.0
 	
-	voxels := &VoxelSet{Voxels: mapset.NewThreadUnsafeSet[Coordinate]()}
-	
 	minX, minY, minZ := inputFile.Header.MinX, inputFile.Header.MinY, inputFile.Header.MinZ
 
+	minXVoxel, minYVoxel, minZVoxel := int(minX / processor.VoxelSize), int(minY / processor.VoxelSize), int(minZ / processor.VoxelSize)
+
+	voxels := &VoxelSet{Voxels: mapset.NewThreadUnsafeSet[Coordinate](), XMin: minXVoxel, YMin: minYVoxel, ZMin: minZVoxel}
+	
 	rawBytes := chunk.ReadOnFile(inputFile)
 
 	for i := chunk.Start; i < chunk.End; i++ {

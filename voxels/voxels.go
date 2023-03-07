@@ -47,6 +47,15 @@ type VoxelSet struct {
 	// Number of voxels in the Z direction
 	ZVoxels int
 
+	// Min number of voxels in the x direction
+	XMin int
+
+	// Min number of voxels in the y direction
+	YMin int
+
+	// Min number of voxels in the z direction
+	ZMin int
+
 	// Set of voxels in this VoxelSet
 	Voxels mapset.Set[Coordinate]
 }
@@ -232,7 +241,7 @@ func PointToCoordinate(x float64, minX float64, y float64, minY float64, z float
 	var deltaX, deltaY, deltaZ float64
 
 	if (zeroCoords) {
-		deltaX, deltaY, deltaZ = x - minX, y - minY, z - minZ
+		deltaX, deltaY, deltaZ = x - minX, y - minY, z - minZ // not used currently
 	} else {
 		deltaX, deltaY, deltaZ = x, y, z
 	}
@@ -300,7 +309,7 @@ func writeMinimumHeights(filename string, heights *MinimumHeights, status *lasPr
 	for point, min := range heights.Heights {
 
 		// hsv colors
-		i := 200 + float64(min) / float64(voxels.ZVoxels) * -200
+		i := 200 + float64(min - voxels.ZMin) / float64(voxels.ZVoxels) * -200
 		r, g, b := hsvToRGB(i, 1, 1)
 		color := color.RGBA{R: r, G: g, B: b, A: 255}
 
@@ -308,7 +317,7 @@ func writeMinimumHeights(filename string, heights *MinimumHeights, status *lasPr
 		// i := 255 - uint8(float64(min) / float64(voxels.ZVoxels) * 255)
 		// color := color.RGBA{R: i, G: i, B: i, A: 255}
 		
-		image.SetRGBA(point.X, point.Y, color)
+		image.SetRGBA(point.X - voxels.XMin, point.Y - voxels.YMin, color)
 
 		current += 1
 		*status = lasProcessing.PipelineStatus{Step: "Write min", Progress: float64(current) / float64(total)}

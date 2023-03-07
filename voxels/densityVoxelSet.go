@@ -32,6 +32,15 @@ type DensityVoxelSet struct {
 	// Number of voxels in the Z direction
 	ZVoxels int
 
+	// Min number of voxels in the x direction
+	XMin int
+
+	// Min number of voxels in the y direction
+	YMin int
+
+	// Min number of voxels in the z direction
+	ZMin int
+
 	// Set of voxels point densities
 	Voxels map[Coordinate]int
 }
@@ -52,10 +61,12 @@ func(processor *DensityVoxelSetProcessor) Process(inputFile *lidarioMod.LasFile,
 	
 	*status = 0.0
 	
-	voxels := &DensityVoxelSet{Voxels: make(map[Coordinate]int)}
-	
 	minX, minY, minZ := inputFile.Header.MinX, inputFile.Header.MinY, inputFile.Header.MinZ
 
+	minXVoxel, minYVoxel, minZVoxel := int(minX / processor.VoxelSize), int(minY / processor.VoxelSize), int(minZ / processor.VoxelSize)
+
+	voxels := &DensityVoxelSet{Voxels: make(map[Coordinate]int), XMin: minXVoxel, YMin: minYVoxel, ZMin: minZVoxel}
+	
 	rawBytes := chunk.ReadOnFile(inputFile)
 
 	for i := chunk.Start; i < chunk.End; i++ {
