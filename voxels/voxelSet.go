@@ -15,6 +15,8 @@ type VoxelSetProcessor struct {
 	// Voxel size to use with this processor
 	VoxelSize float64
 
+	// Optional scanner locations for advanced voxel filling
+	ScannerLocations []Coordinate
 }
 
 // Processes a chunk of a LAS file into a VoxelSet

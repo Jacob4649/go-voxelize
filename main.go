@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/Jacob4649/go-voxelize/go-voxelize/lasProcessing"
 	"github.com/Jacob4649/go-voxelize/go-voxelize/lidarioMod"
@@ -45,6 +47,9 @@ type executionArgs struct {
 
 	// whether to split into sources
 	splitSources bool
+
+	// scanner locations
+	scannerLocations string
 }
 
 // parses the specified arguments
@@ -70,6 +75,8 @@ func parseArgs() executionArgs {
 
 	splitSources := flag.Bool("split-sources", false, "whether to split input by source before processing")
 
+	scannerLocations := flag.String("scanner-locations", "", "comma-separated list of scanner x,y,z coordinates (e.g., \"x1,y1,z1,x2,y2,z2\")")
+
 	flag.Parse()
 
 	fileName := flag.Arg(0)
@@ -82,7 +89,36 @@ func parseArgs() executionArgs {
 	return executionArgs{fileName: fileName, destName: *destName, 
 		concurrency: *concurrency, chunkNumber: *chunkNumber, density: *density, voxelSize: *voxelSize,
 		normalize: *normalize, gradient: *gradient, minimumImagePath: *minimumImagePath, splitSources: *splitSources,
-		measurements: *measurements}
+		measurements: *measurements, scannerLocations: *scannerLocations}
+}
+
+// helper function to parse scanner locations
+func parseScannerLocations(locationsString string, voxelSize float64) ([]voxels.Coordinate, error) {
+	locations := []voxels.Coordinate{}
+	if locationsString == "" {
+		return locations, nil
+	}
+
+	parts := strings.Split(locationsString, ",")
+	if len(parts)%3 != 0 {
+		return nil, fmt.Errorf("scanner locations string must have a number of values divisible by 3 (x,y,z triplets)")
+	}
+
+	for i := 0; i < len(parts); i += 3 {
+		x, errX := strconv.ParseFloat(parts[i], 64)
+		y, errY := strconv.ParseFloat(parts[i+1], 64)
+		z, errZ := strconv.ParseFloat(parts[i+2], 64)
+
+		if errX != nil || errY != nil || errZ != nil {
+			return nil, fmt.Errorf("error parsing scanner location coordinates: %v, %v, %v", errX, errY, errZ)
+		}
+		// Convert to voxel coordinates. Assuming 0,0,0 min for now, this might need adjustment
+		// based on how global vs local coordinates are handled for scanners.
+		// For now, directly convert.
+		coord := voxels.PointToCoordinate(x, 0, y, 0, z, 0, voxelSize, false)
+		locations = append(locations, coord)
+	}
+	return locations, nil
 }
 
 // performs the main processing of the LAS file
@@ -126,7 +162,7 @@ func postProcessing[I any, O any](voxels I, pipeline lasProcessing.PostProcessin
 }
 
 /// selects a post processing pipeline to use for density voxels
-func chooseDensityVoxelPipeline(config executionArgs) lasProcessing.PostProcessingPipeline[*voxels.DensityVoxelSet, error] {
+func chooseDensityVoxelPipeline(config executionArgs, scannerCoords []voxels.Coordinate) lasProcessing.PostProcessingPipeline[*voxels.DensityVoxelSet, error] {
 	var finalPipeline lasProcessing.PostProcessingPipeline[*voxels.DensityVoxelSet, error]
 	
 	var voxelPipeline lasProcessing.PostProcessingPipeline[*voxels.DensityVoxelSet, *voxels.VoxelSet] = 
@@ -153,18 +189,34 @@ func chooseDensityVoxelPipeline(config executionArgs) lasProcessing.PostProcessi
 			heightPipeline, &voxels.MinimumDegrouper{})
 	}
 
+	// Insert OcclusionProcessor after VoxelCondenser (which is the last step in current voxelPipeline)
+	// The scannerCoords are parsed in main and passed to processDensityVoxels, then to here via config.
+	// We need to get scannerCoords into this scope.
+	// For now, let's assume scannerCoords can be accessed via config or passed differently.
+	// Modifying chooseDensityVoxelPipeline to accept scannerCoords.
+	// scannerCoords are now passed as a parameter.
+
+	occlusionAwarePipeline := lasProcessing.ChainPipeline[*voxels.DensityVoxelSet, *voxels.VoxelSet, *voxels.VoxelSet](
+		voxelPipeline,
+		&voxels.OcclusionProcessor{
+			ScannerLocations: scannerCoords, // Use the passed-in scannerCoords
+			VoxelSize:        config.voxelSize,
+		},
+	)
+
+	// The rest of the pipeline now chains from occlusionAwarePipeline
 	finalPipeline = lasProcessing.ChainPipeline[*voxels.DensityVoxelSet, *voxels.VoxelSet, error](
-		voxelPipeline, &voxels.VoxelFileWriter{FileName: config.destName})
+		occlusionAwarePipeline, &voxels.VoxelFileWriter{FileName: config.destName})
 
 	if config.gradient {
 		gradientPipline := lasProcessing.ChainPipeline[*voxels.DensityVoxelSet, *voxels.VoxelSet, *voxels.HeightGradient](
-			voxelPipeline, &voxels.GradientProcessor{})
+			occlusionAwarePipeline, &voxels.GradientProcessor{})
 
 		finalPipeline = lasProcessing.ChainPipeline[*voxels.DensityVoxelSet, *voxels.HeightGradient, error](
 			gradientPipline, &voxels.GradientFileWriter{FileName: config.destName})
 	} else if config.measurements {
 		measurementPipeline := lasProcessing.ChainPipeline[*voxels.DensityVoxelSet, *voxels.VoxelSet, *voxels.Measurements](
-			voxelPipeline, &voxels.MeasurementFinder{})
+			occlusionAwarePipeline, &voxels.MeasurementFinder{})
 
 		finalPipeline = lasProcessing.ChainPipeline[*voxels.DensityVoxelSet, *voxels.Measurements, error](
 			measurementPipeline, &voxels.MeasurementsFileWriter{FileName: config.destName})
@@ -174,22 +226,27 @@ func chooseDensityVoxelPipeline(config executionArgs) lasProcessing.PostProcessi
 }
 
 // processes some density voxels and outputs an error
-func processDensityVoxels(file *lidarioMod.LasFile, config executionArgs) error {
+func processDensityVoxels(file *lidarioMod.LasFile, config executionArgs, scannerCoords []voxels.Coordinate) error {
 		// main processing
 
-		processor := voxels.DensityVoxelSetProcessor{PointDensity: config.density, VoxelSize: config.voxelSize}
+		processor := voxels.DensityVoxelSetProcessor{
+			PointDensity:     config.density,
+			VoxelSize:        config.voxelSize,
+			ScannerLocations: scannerCoords, // Pass parsed scanner coordinates
+		}
 
 		output := mainProcessing[voxels.DensityVoxelSet](file, &processor, config)
 	
 		// post processing
 	
-		pipeline := chooseDensityVoxelPipeline(config)
+		pipeline := chooseDensityVoxelPipeline(config, scannerCoords) // Pass scannerCoords here
 	
 		return postProcessing(output, pipeline, config)
 }
 
 // makes pipelines for processing density voxel sets from different sources
-func makeSourcesPipelines(sets []*voxels.DensityVoxelSet, config executionArgs) ([]executionArgs, []lasProcessing.PostProcessingPipeline[*voxels.DensityVoxelSet, error]) {
+// Also needs scannerCoords if chooseDensityVoxelPipeline is called within.
+func makeSourcesPipelines(sets []*voxels.DensityVoxelSet, config executionArgs, scannerCoords []voxels.Coordinate) ([]executionArgs, []lasProcessing.PostProcessingPipeline[*voxels.DensityVoxelSet, error]) {
 	configs := make([]executionArgs, 0)
 
 	for i, _ := range sets {
@@ -204,17 +261,23 @@ func makeSourcesPipelines(sets []*voxels.DensityVoxelSet, config executionArgs) 
 	pipelines := make([]lasProcessing.PostProcessingPipeline[*voxels.DensityVoxelSet, error], 0)
 
 	for _, pipelineConfig := range configs {
-		pipelines = append(pipelines, chooseDensityVoxelPipeline(pipelineConfig))
+		// Each source might have its own scanner context if that was a feature,
+		// but for now, use the global scannerCoords for all.
+		pipelines = append(pipelines, chooseDensityVoxelPipeline(pipelineConfig, scannerCoords))
 	}
 
 	return configs, pipelines
 }
 
 // processes voxels by source and outputs an error
-func processSources(file *lidarioMod.LasFile, config executionArgs) {
+func processSources(file *lidarioMod.LasFile, config executionArgs, scannerCoords []voxels.Coordinate) {
 	// main processing
 	
-	processor := voxels.PointSourceProcessor{PointDensity: config.density, VoxelSize: config.voxelSize}
+	processor := voxels.PointSourceProcessor{
+		PointDensity:     config.density,
+		VoxelSize:        config.voxelSize,
+		ScannerLocations: scannerCoords, // Pass parsed scanner coordinates
+	}
 
 	output := mainProcessing[voxels.PointSourceDensityVoxelSet](file, &processor, config)
 
@@ -226,7 +289,7 @@ func processSources(file *lidarioMod.LasFile, config executionArgs) {
 
 	// concurrent post processing
 
-	configs, pipelines := makeSourcesPipelines(sets, config)
+	configs, pipelines := makeSourcesPipelines(sets, config, scannerCoords) // Pass scannerCoords here
 
 	for i, pipeline := range pipelines {
 		set := sets[i]
@@ -245,6 +308,17 @@ func main() {
 
 	config := parseArgs()
 
+	scannerCoords, err := parseScannerLocations(config.scannerLocations, config.voxelSize)
+	if err != nil {
+		fmt.Printf("Error parsing scanner locations: %v\n", err)
+		os.Exit(1)
+	}
+
+	// For debugging, print the parsed scanner coordinates
+	if len(scannerCoords) > 0 {
+		fmt.Printf("Parsed scanner locations (voxel coordinates): %+v\n", scannerCoords)
+	}
+
 	file, err := lidarioMod.NewLasFile(config.fileName, "rh")
 
 	if err != nil {
@@ -253,9 +327,9 @@ func main() {
 	}
 
 	if config.splitSources {
-		processSources(file, config)
+		processSources(file, config, scannerCoords)
 	} else {
-		err = processDensityVoxels(file, config)
+		err = processDensityVoxels(file, config, scannerCoords)
 	}
 
 	// processing finished
